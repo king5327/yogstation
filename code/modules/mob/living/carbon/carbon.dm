@@ -732,8 +732,8 @@
 					return
 				stat = UNCONSCIOUS
 				update_canmove()
-				if(!dream.Dream(src))
-					blind_eyes(1)
+				dream.Dream(src)
+				blind_eyes(1)
 
 		else if(health <= config.health_threshold_crit)
 			if(NOCRIT in status_flags)
@@ -806,3 +806,29 @@
 		user << "<span class='notice'>You retrieve some of [src]\'s internal organs!</span>"
 
 	..()
+
+/mob/living/carbon/proc/pauseDream() //This shuts down the dream and brings them back to the old dreaming state for the remainder of their sleep
+	if(dream && dream.canDream && disableDream())
+		addtimer(src,"enableDream",0)
+
+/mob/living/carbon/proc/disableDream()
+	if(dream)
+		dream.canDream = FALSE
+		dream.stopDream()
+		return 1
+	return 0
+
+/mob/living/carbon/proc/enableDream()
+	if(dream)
+		dream.canDream = TRUE
+		return 1
+	return 0
+
+/mob/living/carbon/isActive(var/pullClientBack = 1)
+	..()
+	if(dream)
+		if(pullClientBack)
+			pauseDream()
+			return 1
+		else if(ishuman(dream.DB) && dream.DB.ckey)
+			return 1
