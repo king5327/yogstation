@@ -6,13 +6,12 @@
 	var/mob/living/carbon/human/dream/DB = /mob/living/carbon/human/dream
 	var/dream
 	var/canDream = TRUE
-	var/initialized = FALSE
+	var/key
 
 /datum/dream/proc/Dream(mob/living/carbon/C)
-	if(dreaming || !C || !canDream || !C.client || (ishuman(DB) && DB.ckey))
+	if(dreaming || !C || !canDream || !C.client)
 		return 0
 	owner = C
-	initialized = TRUE
 	var/area/current = get_area(owner)
 	if(current && current.dreamtype && prob(50))
 		dream = pick(get_dream(current.dreamtype))
@@ -31,7 +30,7 @@
 		DB.body = C
 		DB.dream = src
 		DB.name = C.real_name
-		DB.real_name = "dream [C.real_name]" //So they dont fuck with objectives
+		DB.real_name = "-[C.real_name]" //So they dont fuck with objectives
 		if(ishuman(C))
 			var/mob/living/carbon/human/H = C
 			H.dna.transfer_identity(DB, transfer_SE=0)
@@ -48,8 +47,11 @@
 			DB.equip_to_slot_if_possible(mask, slot_wear_mask)
 	for(var/mob/living/carbon/human/dream/D in mob_list)
 		D.dream.setInvisibility()	//If one new dude comes in, he will be visible, so redo the invisibility for all...
+	key = "@[C.ckey]"
+	world << "1 [key]"
 	DB.forceMove(DS)
 	DB.ckey = C.ckey
+	C.key = key
 	setInvisibility()
 	DB.overlay_fullscreen("dream", /obj/screen/fullscreen/blind)
 	DB << dream.dream_message
@@ -71,32 +73,41 @@
 	if(!owner)
 		terminateDream()
 	if(owner.stat != UNCONSCIOUS)
-		STOP_PROCESSING(SSobj, src)
 		stopDream()
 		return
 	owner.reset_perspective(dream)
 
 
 /datum/dream/proc/stopDream()
+	if(owner.client) //Some other code already did this. If we do it anyway, the active ckey gets turned to null
+		return                 //Wanna know what that does? It DC's the person and forces them to respawn
 	STOP_PROCESSING(SSobj, src)
-	if(!initialized)
-		return
-	else if(!owner)   //This is what happens when the body gets deleted. Never give a deleted body a ckey, the person will respawn instead
+	if(!owner)   //This is what happens when the body gets deleted. Never give a deleted body a ckey, the person will respawn instead
 		terminateDream()
 		return
 	dreaming = FALSE
 	owner.ckey = DB.ckey
+	DB.key = key
 
 /datum/dream/proc/terminateDream()
-	if(DB.client || DB.key) //Only do this if it didnt get caught by other code
-		DB << "<span class='combat'>Your body is gone...</span>"
-		DB.ghostize()
+	for(var/mob/M in mob_list)
+		if(M.key == "@[DB.ckey]")
+			M.ckey = DB.ckey
+			return
 		qdel(DB)
 		qdel(src)
 
 /mob/living/carbon/human/dream
 	var/mob/living/carbon/body
 	pass_flags = PASSMOB
+
+/mob/living/carbon/human/dream/Life()
+	if(z != 10) //There's a bug where the dream body would spawn on the real body. z10 is the dream z-level
+		z = 10
+		x = 5
+		y = 5
+	if(client && body.stat == CONSCIOUS)
+		stopDream()
 
 /mob/living/carbon/human/dream/New()
 	..()
